@@ -10,7 +10,7 @@ class Platform:
     def addUser(self, name, version = 0):
         self.__database.createUser(name, version)
 
-    def infection(self, id, version):
+    def infection(self, uid, version):
         # queue = deque([id])
         # while(queue):
         #     user = self.__database.getUserById(queue.popleft())
@@ -20,9 +20,14 @@ class Platform:
         #         if(infected_user.getVersion() != version):
         #             queue.append(infected_user.getId())
         self.__database.setClusterWithVersion(
-            self.__database.getUserById(id).getClusterId(), version)
-    def limitedInfection(self, id, version):
-        pass
+            self.__database.getUserById(uid).getClusterId(), version)
+
+    def limitedInfection(self, uid, version, limit):
+        for cid, cluster in enumerate(self.__database.getAllClusters()):
+            if uid in cluster and len(cluster) <= limit:
+                self.__database.setClusterWithVersion(cid, version)
+                return True
+        return False
 
     def printAllUsers(self):
         print "User Id" + '\t' * 2,
@@ -35,7 +40,9 @@ class Platform:
             print str(user.getVersion()) + '\t' * 2,
             print str(user.getClusterId())
 
-
+# Cluster is defined as a group of users that are connected either by
+# the coaching or coachby relationship. Infection will affect one cluster
+# at a time.
 class Database:
     def __init__(self, file):
         self.__users_list = dict()
@@ -54,10 +61,7 @@ class Database:
                     self.__users_list[student].addCoach(cid)
 
             # Build clusters
-            for cid, user in self.__users_list.iteritems():
-                self.__groupToCluster(set([user.getId()]) |
-                                    user.getCoaching() |
-                                    user.getCoacedhBy())
+            self.__buildClusters()
 
     def createUser(self, uid, name, version = 0):
         user = User(uid, name, version)
@@ -79,6 +83,15 @@ class Database:
     def getAllUsers(self):
         return self.__users_list
 
+    def getAllClusters(self):
+        return self.__users_clusters
+
+    def __buildClusters(self):
+        for cid, user in self.__users_list.iteritems():
+            self.__groupToCluster(set([user.getId()]) |
+                                    user.getCoaching() |
+                                    user.getCoacedhBy())
+
     def __groupToCluster(self, uid_set):
         cid = -1
         for i, cluster in enumerate(self.__users_clusters):
@@ -93,6 +106,9 @@ class Database:
 
         for uid in uid_set:
             self.__users_list[uid].setClusterId(cid)
+
+    def __updateCluster(self):
+        pass
 
     def setClusterWithVersion(self, cluster_id, version):
         map(lambda x: x.setVersion(version),
