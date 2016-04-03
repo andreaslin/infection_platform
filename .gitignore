@@ -1,0 +1,13 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# graphicviz gv file
+*.gv
+
+# Large files
+users_10000.gv.png
