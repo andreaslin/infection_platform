@@ -1,14 +1,22 @@
 #!/usr/bin ptyhon
 # -*- coding: utf-8 -*-
 from collections import deque
+from graphviz import Digraph
 import json
 
 class Platform:
     def __init__(self, file, verbose = False):
         self.__database = Database(file)
+        self.__file_name = file.split('.')[0]
 
     def addUser(self, name, version = 0):
-        self.__database.createUser(name, version)
+        return self.__database.createUser(name, version)
+
+    def removeUserById(self, uid):
+        self.__database.removeUserById(uid)
+
+    def getUserById(self, uid):
+        return self.__database.getUserById(uid)
 
     def infection(self, uid, version):
         # queue = deque([id])
@@ -39,6 +47,26 @@ class Platform:
             print user.getName() + '\t' * 3,
             print str(user.getVersion()) + '\t' * 2,
             print str(user.getClusterId())
+
+    def generateGraph(self):
+        g = Digraph('User Relationship', filename=self.__file_name + ".gv", format='png')
+        for cid, cluster in enumerate(self.__database.getAllClusters()):
+            temp = cluster.pop()
+            version = self.__database.getUserById(temp).getVersion()
+            cluster.add(temp)
+
+            graph_cluster = Digraph(str(cid))
+            for uid in cluster:
+                user = self.__database.getUserById(uid)
+                graph_cluster.node(str(uid))
+                for coaching in user.getCoaching():
+                    graph_cluster.node(str(coaching))
+                    if uid != coaching:
+                        graph_cluster.edge(str(uid), str(coaching))
+
+            g.subgraph(graph_cluster)
+        g.view()
+
 
 # Cluster is defined as a group of users that are connected either by
 # the coaching or coachby relationship. Infection will affect one cluster
@@ -71,8 +99,8 @@ class Database:
     def __addUser(self, user):
         self.__users_list[user.getId()] = user
 
-    def removeUser(self, user):
-        self.__users_list[user.getId()] = None
+    def removeUserById(self, uid):
+        self.__users_list[uid] = None
 
     def getUserById(self, uid):
         return self.__users_list[uid]
@@ -87,27 +115,48 @@ class Database:
         return self.__users_clusters
 
     def __buildClusters(self):
-        for cid, user in self.__users_list.iteritems():
+        for uid, user in self.__users_list.iteritems():
             self.__groupToCluster(set([user.getId()]) |
                                     user.getCoaching() |
                                     user.getCoacedhBy())
 
+        # Assign cluster id to users
+        for uid, user in self.__users_list.iteritems():
+            i = 0
+            while(i  < len(self.__users_clusters)):
+                if uid in self.__users_clusters[i]:
+                    user.setClusterId(i)
+                i += 1
+
     def __groupToCluster(self, uid_set):
-        cid = -1
+        new_cluster = True
+
         for i, cluster in enumerate(self.__users_clusters):
             if not cluster.isdisjoint(uid_set):
                 cluster |= uid_set
-                cid = i
+                new_cluster = False
+
+        # Combine overlapping clusters
+        i = 0
+        while(i < len(self.__users_clusters)):
+            j = i + 1
+            while(j < len(self.__users_clusters)):
+                cluster_1 = self.__users_clusters[i]
+                cluster_2 = self.__users_clusters[j]
+
+                if not cluster_1.isdisjoint(cluster_2):
+                    cluster_1 |= cluster_2
+                    self.__users_clusters.pop(j)
+                else:
+                    j += 1
+            i += 1
 
         # New cluster
-        if(cid == -1):
-            self.__users_clusters.append(set(uid_set))
-            cid = len(self.__users_clusters) - 1
-
-        for uid in uid_set:
-            self.__users_list[uid].setClusterId(cid)
+        if new_cluster:
+            self.__users_clusters.append(uid_set)
 
     def __updateCluster(self):
+        # TODO: Update clusters after user is added or removed
         pass
 
     def setClusterWithVersion(self, cluster_id, version):
